@@ -9,12 +9,14 @@ class IO:
         self.UseAnsi = False
         self.BaseOffset = base_offset
         self.Length = length
+        self.fd = None
+        self.Initialized = False
 
-        self.open(filename)
+        self.Initialized = self.open(filename)
         self.set_page_info(page_size, oob_size, page_per_block)
 
     def is_initialized(self):
-        return True
+        return self.Initialized
 
     def dump_info(self):
         return ""
@@ -51,11 +53,15 @@ class IO:
 
         except OSError:
             print('Can\'t open a file:', filename)
+            self.fd = None
+            self.FileSize = 0
             return False
         return True
 
     def close(self):
-        self.fd.close()
+        if self.fd is not None:
+            self.fd.close()
+            self.fd = None
 
     def __enter__(self):
         return self
@@ -70,6 +76,9 @@ class IO:
         return pageno * self.RawPageSize
 
     def read_page(self, pageno, remove_oob = False):
+        if self.fd is None:
+            return b''
+
         offset = self.get_page_offset(pageno)
 
         if offset > self.FileSize:
@@ -82,5 +91,8 @@ class IO:
         return self.fd.read(self.RawPageSize)
 
     def read_oob(self, pageno):
+        if self.fd is None:
+            return b''
+
         self.fd.seek(self.BaseOffset + pageno*self.RawPageSize+self.PageSize)
         return self.fd.read(self.OOBSize)
