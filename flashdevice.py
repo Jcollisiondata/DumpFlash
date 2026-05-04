@@ -186,8 +186,11 @@ class IO:
         if not flash_identifiers:
             return False
 
+        manufacturer_id = flash_identifiers[0]
+        device_id = flash_identifiers[1] if len(flash_identifiers) > 1 else flash_identifiers[0]
+
         for device_description in flashdevice_defs.DEVICE_DESCRIPTIONS:
-            if device_description[1] == flash_identifiers[0]:
+            if device_description[1] == device_id:
                 (self.Name, self.ID, self.PageSize, self.ChipSizeMB, self.EraseSize, self.Options, self.AddrCycles) = device_description
                 self.Identified = True
                 break
@@ -209,25 +212,25 @@ class IO:
             onfi_data = self.__read_data(0x100)
             onfi = onfi_data[0:4] == b'ONFI'
 
-        if flash_identifiers[0] == 0x98:
+        if manufacturer_id == 0x98:
             self.Manufacturer = 'Toshiba'
-        elif flash_identifiers[0] == 0xec:
+        elif manufacturer_id == 0xec:
             self.Manufacturer = 'Samsung'
-        elif flash_identifiers[0] == 0x04:
+        elif manufacturer_id == 0x04:
             self.Manufacturer = 'Fujitsu'
-        elif flash_identifiers[0] == 0x8f:
+        elif manufacturer_id == 0x8f:
             self.Manufacturer = 'National Semiconductors'
-        elif flash_identifiers[0] == 0x07:
+        elif manufacturer_id == 0x07:
             self.Manufacturer = 'Renesas'
-        elif flash_identifiers[0] == 0x20:
+        elif manufacturer_id == 0x20:
             self.Manufacturer = 'ST Micro'
-        elif flash_identifiers[0] == 0xad:
+        elif manufacturer_id == 0xad:
             self.Manufacturer = 'Hynix'
-        elif flash_identifiers[0] == 0x2c:
+        elif manufacturer_id == 0x2c:
             self.Manufacturer = 'Micron'
-        elif flash_identifiers[0] == 0x01:
+        elif manufacturer_id == 0x01:
             self.Manufacturer = 'AMD'
-        elif flash_identifiers[0] == 0xc2:
+        elif manufacturer_id == 0xc2:
             self.Manufacturer = 'Macronix'
         else:
             self.Manufacturer = 'Unknown'
