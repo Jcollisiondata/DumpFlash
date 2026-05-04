@@ -43,6 +43,7 @@ class IO:
         self.BitsPerCell = 0
         self.WriteProtect = True
         self.CheckBadBlock = True
+        self.BadBlockMarkerOffset = 0
         self.RemoveOOB = False
         self.UseSequentialMode = False
         self.UseAnsi = False
@@ -77,6 +78,9 @@ class IO:
 
         self.__wait_ready()
         self.__get_id()
+
+    def _is_bad_block_marker(self, oob):
+        return len(oob) > self.BadBlockMarkerOffset and oob[self.BadBlockMarkerOffset] != 0xff
 
     def __wait_ready(self):
         if self.ftdi is None or not self.ftdi.is_connected:
@@ -364,7 +368,7 @@ class IO:
             for pageoff in range(0, 2, 1):
                 oob = self.read_oob(page+pageoff)
 
-                if len(oob) > 5 and oob[5] != 0xff:
+                if self._is_bad_block_marker(oob):
                     print('Bad block found:', block)
                     bad_blocks[page] = 1
                     break
@@ -442,7 +446,8 @@ class IO:
             page_data = self.__read_data(self.RawPageSize)
 
             if i in (0, 1):
-                if page_data[self.PageSize + 5] != 0xff:
+                marker_index = self.PageSize + self.BadBlockMarkerOffset
+                if len(page_data) > marker_index and page_data[marker_index] != 0xff:
                     bad_block = True
 
             if remove_oob:
@@ -576,7 +581,7 @@ class IO:
                     for pageoff in range(0, 2, 1):
                         oob = self.read_oob(page+pageoff)
 
-                        if len(oob) > 5 and oob[5] != 0xff:
+                        if self._is_bad_block_marker(oob):
                             bad_block_found = True
                             break
 

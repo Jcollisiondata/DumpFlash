@@ -1,3 +1,8 @@
 26-0939_Onstar_Gen11.img
 chip_user_only.bin
 Onstar_Gen11.bin
+chip_raw_544MiB.img
+chip_raw_544MiB.bin
+test_block0_raw.bin
+test_block0_raw_4k256.bin
+test_block0_user.bin

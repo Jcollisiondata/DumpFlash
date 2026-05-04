@@ -31,6 +31,7 @@ def build_parser():
     parser.add_argument("-P", type=int, default=512, dest="page_size")
     parser.add_argument("-O", type=int, default=16, dest="oob_size")
     parser.add_argument("--bp", type=int, default=32, dest="pages_per_block")
+    parser.add_argument("--force-device-geometry", action="store_true", dest="force_device_geometry", default=False, help="Force -P/-O/--bp geometry for live device access")
     parser.add_argument("extra_args", nargs="*")
     return parser
 
@@ -123,6 +124,10 @@ def main(argv=None):
     if not flash_image_io.is_initialized():
         print("Device not ready, aborting...")
         return 1
+
+    if options.force_device_geometry and not options.raw_image_filename:
+        flash_image_io.override_geometry(options.page_size, options.oob_size, options.pages_per_block)
+        print("Forced device geometry: page=0x%x oob=0x%x pages/block=%d" % (flash_image_io.SrcImage.PageSize, flash_image_io.SrcImage.OOBSize, flash_image_io.SrcImage.PagePerBlock))
 
     flash_image_io.set_use_ansi(_enable_ansi())
     start_page, end_page = _apply_page_selection(options, flash_image_io)

@@ -13,11 +13,13 @@ class IO:
         self.UseSequentialMode = False
         self.DumpProgress = True
         self.DumpProgressInterval = 1
+        self.FileMode = bool(filename)
 
         if filename:
             self.SrcImage = flashfile.IO(filename, base_offset = base_offset, length = length, page_size = page_size, oob_size = oob_size, page_per_block = page_per_block)
         else:
             self.SrcImage = flashdevice.IO(slow)
+        self.BadBlockMarkerOffset = getattr(self.SrcImage, 'BadBlockMarkerOffset', 0)
 
     def is_initialized(self):
         return self.SrcImage.is_initialized()
@@ -25,6 +27,25 @@ class IO:
     def set_use_ansi(self, use_ansi):
         self.UseAnsi = use_ansi
         self.SrcImage.set_use_ansi(use_ansi)
+
+    def override_geometry(self, page_size = None, oob_size = None, page_per_block = None):
+        if page_size is not None and page_size > 0:
+            self.SrcImage.PageSize = page_size
+        if oob_size is not None and oob_size >= 0:
+            self.SrcImage.OOBSize = oob_size
+        if page_per_block is not None and page_per_block > 0:
+            self.SrcImage.PagePerBlock = page_per_block
+
+        if self.SrcImage.PageSize > 0 and self.SrcImage.PagePerBlock > 0:
+            self.SrcImage.RawPageSize = self.SrcImage.PageSize + self.SrcImage.OOBSize
+            self.SrcImage.BlockSize = self.SrcImage.PageSize * self.SrcImage.PagePerBlock
+            self.SrcImage.RawBlockSize = self.SrcImage.RawPageSize * self.SrcImage.PagePerBlock
+
+            chip_size_mb = getattr(self.SrcImage, 'ChipSizeMB', 0)
+            if chip_size_mb > 0:
+                total_bytes = chip_size_mb * 1024 * 1024
+                self.SrcImage.PageCount = total_bytes // self.SrcImage.PageSize
+                self.SrcImage.BlockCount = self.SrcImage.PageCount // self.SrcImage.PagePerBlock
 
     def check_ecc(self, start_page = 0, end_page = -1):
         count = 0
@@ -110,11 +131,10 @@ class IO:
         for page in range(0, 2, 1):
             pageno = block * self.SrcImage.PagePerBlock + page
             oob = self.SrcImage.read_oob(pageno)
-            bad_block_marker = oob[6:7]
-            if not bad_block_marker:
+            if len(oob) <= self.BadBlockMarkerOffset:
                 return self.ERROR
-            
-            if bad_block_marker == b'\xff':
+
+            if oob[self.BadBlockMarkerOffset] == 0xff:
                 return self.CLEAN_BLOCK
 
         return self.BAD_BLOCK
@@ -323,7 +343,8 @@ class IO:
 
         with open(output_filename, 'wb') as wfd:
             for block in range(start_block, end_block+1, 1):
-                ret = self.__check_bad_block(block)
+                # For file-mode transforms (-i), preserve exact data and do not skip blocks.
+                ret = self.CLEAN_BLOCK if self.FileMode else self.__check_bad_block(block)
                 if ret == self.CLEAN_BLOCK:
                     current_start_page = 0
                     current_end_page = self.SrcImage.PagePerBlock
@@ -379,7 +400,7 @@ class IO:
             for pageoff in range(0, 2, 1):
                 oob = self.SrcImage.read_oob(_start_page+pageoff)
 
-                if len(oob) > 5 and oob[5] != 0xff:
+                if len(oob) > self.BadBlockMarkerOffset and oob[self.BadBlockMarkerOffset] != 0xff:
                     is_bad_block = True
                     break
 
