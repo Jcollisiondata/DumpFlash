@@ -208,6 +208,7 @@ class IO:
         onfitmp = self.__read_data(4)
 
         onfi = onfitmp == b'ONFI'
+        onfi_geometry = None
 
         if onfi:
             self.__send_cmd(flashdevice_defs.NAND_CMD_ONFI)
@@ -215,6 +216,27 @@ class IO:
             self.__wait_ready()
             onfi_data = self.__read_data(0x100)
             onfi = onfi_data[0:4] == b'ONFI'
+            if onfi and len(onfi_data) >= 101:
+                onfi_page_size = int.from_bytes(onfi_data[80:84], byteorder='little')
+                onfi_oob_size = int.from_bytes(onfi_data[84:86], byteorder='little')
+                onfi_pages_per_block = int.from_bytes(onfi_data[92:96], byteorder='little')
+                onfi_blocks_per_lun = int.from_bytes(onfi_data[96:100], byteorder='little')
+                onfi_lun_count = onfi_data[100]
+
+                if (
+                    onfi_page_size > 0 and
+                    onfi_oob_size > 0 and
+                    onfi_pages_per_block > 0 and
+                    onfi_blocks_per_lun > 0 and
+                    onfi_lun_count > 0
+                ):
+                    onfi_block_count = onfi_blocks_per_lun * onfi_lun_count
+                    onfi_geometry = {
+                        'page_size': onfi_page_size,
+                        'oob_size': onfi_oob_size,
+                        'pages_per_block': onfi_pages_per_block,
+                        'block_count': onfi_block_count,
+                    }
 
         if manufacturer_id == 0x98:
             self.Manufacturer = 'Toshiba'
@@ -303,6 +325,19 @@ class IO:
                     self.OOBSize = 32 * self.PageSize >> 9
         else:
             self.OOBSize = self.PageSize // 32
+
+        if onfi_geometry is not None:
+            self.PageSize = onfi_geometry['page_size']
+            self.OOBSize = onfi_geometry['oob_size']
+            self.PagePerBlock = onfi_geometry['pages_per_block']
+            self.BlockCount = onfi_geometry['block_count']
+            self.BlockSize = self.PageSize * self.PagePerBlock
+            self.PageCount = self.BlockCount * self.PagePerBlock
+            self.RawPageSize = self.PageSize + self.OOBSize
+            self.RawBlockSize = self.RawPageSize * self.PagePerBlock
+            self.EraseSize = self.BlockSize
+            self.ChipSizeMB = (self.PageCount * self.PageSize) // (1024 * 1024)
+            return True
 
         if self.PageSize > 0:
             self.PageCount = (self.ChipSizeMB*1024*1024) // self.PageSize
