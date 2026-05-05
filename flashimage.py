@@ -192,6 +192,8 @@ class IO:
         try:
             for page in range(start_page, end_page, 1):
                 data = self.SrcImage.read_page(page, remove_oob)
+                if not data:
+                    raise RuntimeError('Empty page read at page %d; aborting capture' % page)
 
                 if filename:
                     if maximum != 0:
@@ -254,6 +256,8 @@ class IO:
         try:
             for page in range(start_page, end_page, self.SrcImage.PagePerBlock):
                 data = self.SrcImage.read_seq(page, remove_oob, raw_mode)
+                if not data:
+                    raise RuntimeError('Empty block read at page %d; aborting capture' % page)
 
                 if filename:
                     if maximum != 0:

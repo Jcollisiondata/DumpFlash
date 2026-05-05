@@ -120,10 +120,23 @@ class IO:
 
         self.ftdi.write_data(Array('B', cmds))
         if self.is_slow_mode():
-            data = self.ftdi.read_data_bytes(count*2)
-            data = data[0:-1:2]
+            raw = bytearray()
+            while len(raw) < count * 2:
+                chunk = self.ftdi.read_data_bytes((count * 2) - len(raw), attempt=8)
+                if not chunk:
+                    break
+                raw.extend(chunk)
+            data = raw[0:-1:2]
         else:
-            data = self.ftdi.read_data_bytes(count)
+            data = bytearray()
+            while len(data) < count:
+                chunk = self.ftdi.read_data_bytes(count - len(data), attempt=8)
+                if not chunk:
+                    break
+                data.extend(chunk)
+
+        if len(data) < count:
+            raise RuntimeError('Short FTDI read: requested %d bytes, got %d bytes' % (count, len(data)))
         return bytes(data)
 
     def __write(self, cl, al, data):
@@ -414,7 +427,8 @@ class IO:
         data = bytearray()
         if self.Options & flashdevice_defs.LP_OPTIONS:
             self.__send_cmd(flashdevice_defs.NAND_CMD_READ0)
-            self.__send_address((pageno<<16), self.AddrCycles)
+            # Large-page devices use column+row addressing; set column to PageSize for OOB.
+            self.__send_address((pageno << 16) | self.PageSize, self.AddrCycles)
             self.__send_cmd(flashdevice_defs.NAND_CMD_READSTART)
             self.__wait_ready()
             data.extend(self.__read_data(self.OOBSize))
@@ -434,8 +448,10 @@ class IO:
             self.__send_cmd(flashdevice_defs.NAND_CMD_READ0)
             self.__send_address(pageno<<16, self.AddrCycles)
             self.__send_cmd(flashdevice_defs.NAND_CMD_READSTART)
-            if self.PageSize > 0x1000:
-                length = self.PageSize + self.OOBSize
+            self.__wait_ready()
+            total_length = self.PageSize if remove_oob else (self.PageSize + self.OOBSize)
+            if total_length > 0x1000:
+                length = total_length
                 while length > 0:
                     read_len = 0x1000
                     if length < 0x1000:
@@ -443,9 +459,7 @@ class IO:
                     bytes_to_read.extend(self.__read_data(read_len))
                     length -= 0x1000
             else:
-                bytes_to_read.extend(self.__read_data(self.PageSize+self.OOBSize))
-
-            #d: Implement remove_oob
+                bytes_to_read.extend(self.__read_data(total_length))
         else:
             self.__send_cmd(flashdevice_defs.NAND_CMD_READ0)
             self.__wait_ready()
